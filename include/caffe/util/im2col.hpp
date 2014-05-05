@@ -37,6 +37,19 @@ void copy_stride_gpu(const Dtype* src_data,
 		const int height, const int width, Dtype *dst_data, 
 		const int stride_h, const int stride_w);
 
+template <typename Dtype>
+void copy_stride_gather_gpu(Dtype* src_data, 
+		const int channels,
+		const int height, const int width, const Dtype *dst_data, 
+		const int stride_h, const int stride_w);
+
+template <typename Dtype>
+void col2im_tile_gpu(const Dtype* data_col, const int channels,
+    const int height_col, const int width_col,
+    const int ksize,
+    const int stride_h, const int stride_w,
+    Dtype* data_im);
+
 }  // namespace caffe
 
 #endif  // CAFFE_UTIL_IM2COL_HPP_
