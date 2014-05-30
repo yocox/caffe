@@ -180,8 +180,9 @@ message LayerParameter {
 
   // Parameters for particular layer types.
 
-  // Parameters next available ID: 26 (last added: ThresholdParameter)
+  // next available ID: 27 for params(last added: MultiLabelAccuracyParameter)
   optional ArgMaxParameter argmax_param = 23;
+  optional MultiLabelAccuracyParameter multi_label_accuracy_param = 26;
   optional ConcatParameter concat_param = 9;
   optional ConvolutionParameter convolution_param = 10;
   optional DataParameter data_param = 11;
@@ -380,6 +381,14 @@ message MemoryDataParameter {
   optional uint32 height = 3;
   optional uint32 width = 4;
 }
+// Message that stores parameters used by MultiLabelAccuracyParameter
+message MultiLabelAccuracyParameter {
+// Weights the contribution to the loss by the positive and negative samples
+// One can set both, but usually it is easier to set just one
+// To avoid big losses it is recomended to use weights <= 1.0
+  optional float positive_weight = 1 [default = 1.0];
+  optional float negative_weight = 2 [default = 1.0];
+}
 
 // Message that stores parameters used by PoolingLayer
 message PoolingParameter {
@@ -432,8 +441,8 @@ message WindowDataParameter {
   // warp: cropped window is warped to a fixed size and aspect ratio
   // square: the tightest square around the window is cropped
   optional string crop_mode = 11 [default = "warp"];
-  // If true produces multi-label outputs a vector labels (one per class) per window
-  // with -1 means negative, 0 ignore for that class, and 1 means possitve
+  // If true produces multi-label outputs as vector labels (one per class) per window
+  // with -1 means negative and 1 means positive
   // So the size of the output blob would be 
   // multi_labels = batch_size x num_classes x 1 x 1 
   // instead of labels = batch_size x 1 x 1 x 1
