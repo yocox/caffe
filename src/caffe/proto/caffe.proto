@@ -180,9 +180,9 @@ message LayerParameter {
 
   // Parameters for particular layer types.
 
-  // next available ID: 27 for params(last added: MultiLabelAccuracyParameter)
+  // next available ID: 28 for params(last added: MultiLabelAccuracyParameter)
   optional ArgMaxParameter argmax_param = 23;
-  optional MultiLabelAccuracyParameter multi_label_accuracy_param = 26;
+  optional MultiLabelAccuracyParameter multi_label_accuracy_param = 27;
   optional ConcatParameter concat_param = 9;
   optional ConvolutionParameter convolution_param = 10;
   optional DataParameter data_param = 11;
