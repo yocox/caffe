@@ -40,6 +40,31 @@ __global__ void im2col_gpu_kernel(const int n, const Dtype* data_im,
 }
 
 template <typename Dtype>
+__global__ void im2col_tile_gpu_kernel(const int n, const Dtype* data_im,
+    const int strideh, const int stridew, 
+    const int ksize, 
+    const int height_col, const int width_col,
+    Dtype* data_col) {
+  CUDA_KERNEL_LOOP(index, n) {
+    int w_out = index % width_col;
+    index /= width_col;
+    int h_out = index % height_col;
+    int channel_in = index / height_col;
+    int channel_out = channel_in * ksize * ksize;
+    int h_in = h_out;
+    int w_in = w_out;
+    data_col += (channel_out * height_col + h_out) * width_col + w_out;
+    data_im += (channel_in * strideh + h_in) * stridew + w_in;
+    for (int i = 0; i < ksize; ++i) {
+      for (int j = 0; j < ksize; ++j) {
+        *data_col = data_im[i * stridew + j];
+        data_col += height_col * width_col;
+      }
+    }
+  }
+}
+
+template <typename Dtype>
 void im2col_gpu(const Dtype* data_im, const int channels,
     const int height, const int width, const int ksize, const int pad,
     const int stride, Dtype* data_col) {
@@ -56,6 +81,21 @@ void im2col_gpu(const Dtype* data_im, const int channels,
   CUDA_POST_KERNEL_CHECK;
 }
 
+template <typename Dtype>
+void im2col_tile_gpu(const Dtype* data_im, const int channels,
+		const int stride_h, const int stride_w,
+    const int ksize, Dtype* data_col, 
+    const int height_col, const int width_col) {
+  // We are going to launch channels * height_col * width_col kernels, each
+  // kernel responsible for copying a single-channel grid.
+  int num_kernels = channels * height_col * width_col;
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  im2col_tile_gpu_kernel<Dtype><<<CAFFE_GET_BLOCKS(num_kernels),
+                             CAFFE_CUDA_NUM_THREADS>>>(
+      num_kernels, data_im, stride_h, stride_w, ksize, height_col,
+      width_col, data_col);
+  CUDA_POST_KERNEL_CHECK;
+}
 
 // Explicit instantiation
 template void im2col_gpu<float>(const float* data_im, const int channels,
@@ -64,6 +104,16 @@ template void im2col_gpu<float>(const float* data_im, const int channels,
 template void im2col_gpu<double>(const double* data_im, const int channels,
     const int height, const int width, const int ksize, const int pad,
     const int stride, double* data_col);
+
+template void im2col_tile_gpu<float>(const float* data_im, const int channels,
+		const int stride_h, const int stride_w,
+    const int ksize, float* data_col, 
+    const int height_col, const int width_col);
+template void im2col_tile_gpu<double>(const double* data_im, const int channels,
+		const int stride_h, const int stride_w,
+    const int ksize, double* data_col, 
+    const int height_col, const int width_col);
+
 
 template <typename Dtype>
 __global__ void col2im_gpu_kernel(const int n, const Dtype* data_col,
@@ -128,5 +178,45 @@ template void col2im_gpu<double>(const double* data_col, const int channels,
     const int height, const int width, const int psize, const int pad,
     const int stride, double* data_im);
 
+template <typename Dtype>
+__global__ void copy_stride_gpu_kernel(int n, const Dtype* src_data, 
+		const int channels,
+		const int height, const int width, Dtype *dst_data, 
+		const int stride_h, const int stride_w) {
+  CUDA_KERNEL_LOOP(index, n) {
+    int w = index % width;
+    int h = (index / width) % height;
+    int c = index / (width * height);
+    
+    src_data += (c * height + h) * width + w;
+    dst_data += (c * stride_h + h) * stride_w + w;
+    *dst_data = *src_data;
+  }
+}
+
+template <typename Dtype>
+void copy_stride_gpu(const Dtype* src_data, 
+		const int channels,
+		const int height, const int width, Dtype *dst_data, 
+		const int stride_h, const int stride_w) {
+  int num_kernels = channels * height * width;
+  // To avoid involving atomic operations, we will launch one kernel per
+  // bottom dimension, and then in the kernel add up the top dimensions.
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  copy_stride_gpu_kernel<Dtype><<<CAFFE_GET_BLOCKS(num_kernels),
+                             CAFFE_CUDA_NUM_THREADS>>>(
+      num_kernels, src_data, channels, height, width,
+      dst_data, stride_h, stride_w);
+  CUDA_POST_KERNEL_CHECK;
+}
+
+template void copy_stride_gpu<float>(const float* src_data, 
+		const int channels,
+		const int height, const int width, float *dst_data, 
+		const int stride_h, const int stride_w) ;
+template void copy_stride_gpu<double>(const double* src_data, 
+		const int channels,
+		const int height, const int width, double *dst_data, 
+		const int stride_h, const int stride_w) ;
 
 }  // namespace caffe

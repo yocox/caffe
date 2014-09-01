@@ -13,6 +13,7 @@ namespace caffe {
 template <typename Dtype>
 Dtype ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       vector<Blob<Dtype>*>* top) {
+  if(NTILE_WIDTH_ * NTILE_HEIGHT_ <= 1){
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
     Dtype* top_data = (*top)[i]->mutable_gpu_data();
@@ -40,6 +41,50 @@ Dtype ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
   }
+  }else{
+   const Dtype* bottom_data = bottom[0]->gpu_data();
+   Dtype* top_data = (*top)[0]->mutable_gpu_data();
+   Dtype* col_data = col_buffer_.mutable_gpu_data();
+    CHECK_EQ(stride_, 1);
+    CHECK_EQ(pad_, 0);
+    CHECK_EQ(group_, 1);
+    CHECK_EQ(col_buffer_.height(), TILE_HEIGHT_);
+    Dtype *out_buffer = out_buffer_.mutable_gpu_data();
+    for (int n = 0; n < num_; ++n) {
+      for(int ny = 0; ny < NTILE_HEIGHT_; ny++){
+        for(int nx = 0; nx < NTILE_WIDTH_; nx++){
+          int idx = ny * NTILE_WIDTH_ + nx;
+          const Dtype* weight = this->blobs_[idx]->gpu_data();
+          const Dtype * img = bottom_data + bottom[0]->offset(n, 0,
+                TILE_HEIGHT_ * ny, TILE_WIDTH_ * nx);
+          im2col_tile_gpu(img,   channels_, height_,
+              width_, kernel_size_, col_data,
+              TILE_HEIGHT_, TILE_WIDTH_);
+	  //dump(&col_buffer_);
+          caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, M_, N_, K_,
+              (Dtype)1., weight, col_data, (Dtype)0., out_buffer);
+	  //dump(&out_buffer_);
+          if (bias_term_) {
+            const Dtype *bias_ptr = this->blobs_[idx + NTILE_WIDTH_ *
+		    NTILE_HEIGHT_]->gpu_data();
+            caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, num_output_,
+                N_, 1, (Dtype)1., bias_ptr,
+                reinterpret_cast<const Dtype*>(bias_multiplier_->gpu_data()),
+                (Dtype)1., out_buffer);
+          }
+	  /* copy back */
+
+	  int height_out = height_ - kernel_size_ + 1;
+	  int width_out = width_ - kernel_size_ + 1;
+	  copy_stride_gpu(out_buffer, num_output_, TILE_HEIGHT_, TILE_WIDTH_,
+		top_data + (*top)[0]->offset(n, 0, TILE_HEIGHT_*ny,
+			TILE_WIDTH_*nx), height_out, width_out);
+
+        }
+      }
+    }/* n */
+  }
+
   return Dtype(0.);
 }
 
