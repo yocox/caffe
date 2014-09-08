@@ -21,8 +21,8 @@ template <typename Dtype>
 class ConvolutionLayerTest : public ::testing::Test {
  protected:
   ConvolutionLayerTest()
-      : blob_bottom_(new Blob<Dtype>(2, 3, 6, 4)),
-        blob_bottom_2_(new Blob<Dtype>(2, 3, 6, 4)),
+      : blob_bottom_(new Blob<Dtype>(2, 3, 6, 5)),
+        blob_bottom_2_(new Blob<Dtype>(2, 3, 6, 5)),
         blob_top_(new Blob<Dtype>()),
         blob_top_2_(new Blob<Dtype>()) {}
   virtual void SetUp() {
@@ -69,11 +69,11 @@ TYPED_TEST(ConvolutionLayerTest, TestSetup) {
   EXPECT_EQ(this->blob_top_->num(), 2);
   EXPECT_EQ(this->blob_top_->channels(), 4);
   EXPECT_EQ(this->blob_top_->height(), 2);
-  EXPECT_EQ(this->blob_top_->width(), 1);
+  EXPECT_EQ(this->blob_top_->width(), 2);
   EXPECT_EQ(this->blob_top_2_->num(), 2);
   EXPECT_EQ(this->blob_top_2_->channels(), 4);
   EXPECT_EQ(this->blob_top_2_->height(), 2);
-  EXPECT_EQ(this->blob_top_2_->width(), 1);
+  EXPECT_EQ(this->blob_top_2_->width(), 2);
   // setting group should not change the shape
   convolution_param->set_num_output(3);
   convolution_param->set_group(3);
@@ -82,11 +82,11 @@ TYPED_TEST(ConvolutionLayerTest, TestSetup) {
   EXPECT_EQ(this->blob_top_->num(), 2);
   EXPECT_EQ(this->blob_top_->channels(), 3);
   EXPECT_EQ(this->blob_top_->height(), 2);
-  EXPECT_EQ(this->blob_top_->width(), 1);
+  EXPECT_EQ(this->blob_top_->width(), 2);
   EXPECT_EQ(this->blob_top_2_->num(), 2);
   EXPECT_EQ(this->blob_top_2_->channels(), 3);
   EXPECT_EQ(this->blob_top_2_->height(), 2);
-  EXPECT_EQ(this->blob_top_2_->width(), 1);
+  EXPECT_EQ(this->blob_top_2_->width(), 2);
 }
 
 TYPED_TEST(ConvolutionLayerTest, TestCPUSimpleConvolution) {
@@ -328,5 +328,117 @@ TYPED_TEST(ConvolutionLayerTest, TestGPUGradientGroup) {
   checker.CheckGradientExhaustive(&layer, &(this->blob_bottom_vec_),
       &(this->blob_top_vec_));
 }
+
+TYPED_TEST(ConvolutionLayerTest, TestGPUTiledGradient) {
+  LayerParameter layer_param;
+  ConvolutionParameter* convolution_param =
+      layer_param.mutable_convolution_param();
+  convolution_param->set_kernel_size(3);
+  convolution_param->set_stride(1);
+  convolution_param->set_num_output(2);
+  convolution_param->set_ntile_width(1);
+  convolution_param->set_ntile_height(2);
+
+  convolution_param->mutable_weight_filler()->set_type("gaussian");
+  convolution_param->mutable_bias_filler()->set_type("gaussian");
+  Caffe::set_mode(Caffe::GPU);
+  ConvolutionLayer<TypeParam> layer(layer_param);
+  GradientChecker<TypeParam> checker(1e-2, 1e-3);
+  checker.CheckGradientExhaustive(&layer, &(this->blob_bottom_vec_),
+      &(this->blob_top_vec_));
+}
+
+
+
+TYPED_TEST(ConvolutionLayerTest, TestSimpleTiledConvolution) {
+  // We will simply see if the convolution layer carries out averaging well.
+  FillerParameter filler_param;
+  filler_param.set_value(1.);
+  ConstantFiller<TypeParam> filler(filler_param);
+  filler.Fill(this->blob_bottom_);
+  LayerParameter layer_param;
+  ConvolutionParameter* convolution_param =
+      layer_param.mutable_convolution_param();
+  convolution_param->set_kernel_size(3);
+  convolution_param->set_stride(1);
+  convolution_param->set_num_output(4);
+  convolution_param->set_ntile_width(1);
+  convolution_param->set_ntile_height(2);
+
+  convolution_param->mutable_weight_filler()->set_type("constant");
+  convolution_param->mutable_weight_filler()->set_value(1);
+  convolution_param->mutable_bias_filler()->set_type("constant");
+  convolution_param->mutable_bias_filler()->set_value(0.1);
+  shared_ptr<Layer<TypeParam> > layer(
+      new ConvolutionLayer<TypeParam>(layer_param));
+  layer->SetUp(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  vector<shared_ptr<Blob<TypeParam> > >& layer_blobs = layer->blobs();
+  EXPECT_EQ(layer_blobs.size(), 4);
+  TypeParam *ptr = layer_blobs[3]->mutable_cpu_data();
+  for(int i=0;i<layer_blobs[3]->count();i++)
+	  ptr[i] = 0.2;
+
+  // Test GPU
+  Caffe::set_mode(Caffe::GPU);
+  layer->Forward(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  // After the convolution, the output should all have output values 27.1
+  for(int n = 0; n < this->blob_top_->num(); ++n){
+	  for(int c = 0; c < this->blob_top_->channels(); ++c){
+		  int i = 0;
+		  int s = this->blob_top_->width() * this->blob_top_->height();
+		  const TypeParam *p = this->blob_top_->cpu_data() + this->blob_top_->offset(n, c, 0, 0);
+		  for(;i < s / 2; i++){
+			  EXPECT_GE(p[i], 27.1 - 1e-4);
+			  EXPECT_LE(p[i], 27.1 + 1e-4);
+		  }
+		  for(;i < s; i++){
+			  EXPECT_GE(p[i], 27.2 - 1e-4);
+			  EXPECT_LE(p[i], 27.2 + 1e-4);
+		  }
+  	}
+  }
+}
+
+TYPED_TEST(ConvolutionLayerTest, TestSimpleTiledConvolution1) {
+  // We will simply see if the convolution layer carries out averaging well.
+  FillerParameter filler_param;
+  filler_param.set_value(1.);
+  ConstantFiller<TypeParam> filler(filler_param);
+  filler.Fill(this->blob_bottom_);
+  LayerParameter layer_param;
+  ConvolutionParameter* convolution_param =
+      layer_param.mutable_convolution_param();
+  convolution_param->set_kernel_size(3);
+  convolution_param->set_stride(1);
+  convolution_param->set_num_output(4);
+  convolution_param->set_ntile_height(2);
+  convolution_param->set_ntile_width(3);
+
+  convolution_param->mutable_weight_filler()->set_type("constant");
+  convolution_param->mutable_weight_filler()->set_value(1);
+  convolution_param->mutable_bias_filler()->set_type("constant");
+  convolution_param->mutable_bias_filler()->set_value(0.1);
+  shared_ptr<Layer<TypeParam> > layer(
+      new ConvolutionLayer<TypeParam>(layer_param));
+  layer->SetUp(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  vector<shared_ptr<Blob<TypeParam> > >& layer_blobs = layer->blobs();
+  EXPECT_EQ(layer_blobs.size(), 6*2);
+#if 0
+  TypeParam *ptr = layer_blobs[3]->mutable_cpu_data();
+  for(int i=0;i<layer_blobs[3]->count();i++)
+	  ptr[i] = 0.1;
+#endif
+
+  // Test GPU
+  Caffe::set_mode(Caffe::GPU);
+  layer->Forward(this->blob_bottom_vec_, &(this->blob_top_vec_));
+  const TypeParam* top_data = this->blob_top_->cpu_data();
+  // After the convolution, the output should all have output values 27.1
+  for(int i = 0; i < this->blob_top_->count(); ++i){
+	  EXPECT_GE(top_data[i], 27.1 - 1e-4);
+	  EXPECT_LE(top_data[i], 27.1 + 1e-4);
+  }
+}
+
 
 }  // namespace caffe

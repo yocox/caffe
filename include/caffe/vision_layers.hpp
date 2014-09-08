@@ -55,11 +55,16 @@ class ConvolutionLayer : public Layer<Dtype> {
   int num_output_;
   int group_;
   Blob<Dtype> col_buffer_;
+  Blob<Dtype> out_buffer_;
   shared_ptr<SyncedMemory> bias_multiplier_;
   bool bias_term_;
   int M_;
   int K_;
   int N_;
+  int NTILE_WIDTH_;
+  int NTILE_HEIGHT_;
+  int TILE_WIDTH_;
+  int TILE_HEIGHT_;
 };
 
 /* EltwiseLayer
