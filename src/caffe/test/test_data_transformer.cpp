@@ -17,7 +17,7 @@ namespace caffe {
 
 void FillDatum(const int label, const int channels, const int height,
   const int width, const bool unique_pixels, Datum * datum) {
-  datum->set_label(label);
+  datum->add_label(label);
   datum->set_channels(channels);
   datum->set_height(height);
   datum->set_width(width);

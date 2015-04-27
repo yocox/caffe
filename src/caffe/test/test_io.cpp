@@ -37,7 +37,7 @@ bool ReadImageToDatumReference(const string& filename, const int label,
   datum->set_channels(num_channels);
   datum->set_height(cv_img.rows);
   datum->set_width(cv_img.cols);
-  datum->set_label(label);
+  datum->add_label(label);
   datum->clear_data();
   datum->clear_float_data();
   string* datum_string = datum->mutable_data();
@@ -281,7 +281,7 @@ TEST_F(IOTest, TestReadFileToDatum) {
   Datum datum;
   EXPECT_TRUE(ReadFileToDatum(filename, &datum));
   EXPECT_TRUE(datum.encoded());
-  EXPECT_EQ(datum.label(), -1);
+  EXPECT_EQ(datum.label(0), -1);
   EXPECT_EQ(datum.data().size(), 140391);
 }
 
