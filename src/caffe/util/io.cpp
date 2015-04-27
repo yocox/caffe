@@ -124,12 +124,30 @@ bool ReadImageToDatum(const string& filename, const int label,
       cv::imencode("."+encoding, cv_img, buf);
       datum->set_data(std::string(reinterpret_cast<char*>(&buf[0]),
                       buf.size()));
-      datum->set_label(label);
+      datum->add_label(label);
       datum->set_encoded(true);
       return true;
+    } else {
+      CVMatToDatum(cv_img, datum);
+      datum->add_label(label);
+      return true;
     }
-    CVMatToDatum(cv_img, datum);
-    datum->set_label(label);
+  } else {
+    return false;
+  }
+}
+
+bool ReadImageToDatum(const string& filename, const std::vector<int> labels,
+    const int height, const int width, const bool is_color, Datum* datum) {
+
+  if (ReadImageToDatum(filename, labels[0], height, width, is_color, datum)) {
+    for (int i = 1 ; i < labels.size(); ++i) {
+      if (datum->label_size() <= i) {
+        datum->add_label(labels[i]);
+      } else {
+        datum->set_label(i, labels[i]);
+      }
+    }
     return true;
   } else {
     return false;
@@ -148,7 +166,7 @@ bool ReadFileToDatum(const string& filename, const int label,
     file.read(&buffer[0], size);
     file.close();
     datum->set_data(buffer);
-    datum->set_label(label);
+    datum->add_label(label);
     datum->set_encoded(true);
     return true;
   } else {

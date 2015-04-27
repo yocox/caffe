@@ -69,9 +69,9 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << top[0]->width();
   // label
   if (this->output_labels_) {
-    top[1]->Reshape(this->layer_param_.data_param().batch_size(), 1, 1, 1);
+    top[1]->Reshape(this->layer_param_.data_param().batch_size(), datum.label_size(), 1, 1);
     this->prefetch_label_.Reshape(this->layer_param_.data_param().batch_size(),
-        1, 1, 1);
+        datum.label_size(), 1, 1);
   }
 }
 
@@ -137,7 +137,9 @@ void DataLayer<Dtype>::InternalThreadEntry() {
       this->data_transformer_->Transform(datum, &(this->transformed_data_));
     }
     if (this->output_labels_) {
-      top_label[item_id] = datum.label();
+      for (int l = 0; l < datum.label_size(); ++l) {
+        top_label[item_id * datum.label_size() + l] = datum.label(l);
+      }
     }
     trans_time += timer.MicroSeconds();
     // go to the next iter

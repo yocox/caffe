@@ -889,6 +889,10 @@ const char* UpgradeV1LayerType(const V1LayerParameter_LayerType type) {
     return "MemoryData";
   case V1LayerParameter_LayerType_MULTINOMIAL_LOGISTIC_LOSS:
     return "MultinomialLogisticLoss";
+  case V1LayerParameter_LayerType_MULTI_LABEL_LOSS:
+    return "MultiLabelLoss";
+  case V1LayerParameter_LayerType_MULTI_LABEL_ACCURACY:
+    return "MultiLabelAccuracy";
   case V1LayerParameter_LayerType_MVN:
     return "MVN";
   case V1LayerParameter_LayerType_POOLING:
