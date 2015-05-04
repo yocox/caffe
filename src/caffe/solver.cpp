@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include <signal.h>
 #include "caffe/net.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/solver.hpp"
@@ -12,6 +13,14 @@
 #include "caffe/util/upgrade_proto.hpp"
 
 namespace caffe {
+
+bool g_receive_stop_signal = false;
+
+void stop_signal_callback_handler(int signum)
+{
+    g_receive_stop_signal = true;
+}
+
 
 template <typename Dtype>
 Solver<Dtype>::Solver(const SolverParameter& param)
@@ -29,6 +38,7 @@ Solver<Dtype>::Solver(const string& param_file)
 
 template <typename Dtype>
 void Solver<Dtype>::Init(const SolverParameter& param) {
+  signal(SIGUSR1, stop_signal_callback_handler);
   LOG(INFO) << "Initializing solver from parameters: " << std::endl
             << param.DebugString();
   param_ = param;
@@ -211,6 +221,13 @@ void Solver<Dtype>::Step(int iters) {
     net_->Update();
 
     // Save a snapshot if needed.
+    if (g_receive_stop_signal) {
+      LOG(INFO) << "Training stopped by user!!!";
+      LOG(INFO) << "saving state...";
+      Snapshot();
+      LOG(INFO) << "saving state done";
+      return;
+    }
     if (param_.snapshot() && (iter_ + 1) % param_.snapshot() == 0) {
       Snapshot();
     }
@@ -317,6 +334,10 @@ void Solver<Dtype>::Test(const int test_net_id) {
   }
 }
 
+static void writeLastModelFileName(const std::string& last_model_filename) {
+    std::ofstream fout("last_model");
+    fout << last_model_filename;
+}
 
 template <typename Dtype>
 void Solver<Dtype>::Snapshot() {
@@ -333,6 +354,7 @@ void Solver<Dtype>::Snapshot() {
   model_filename = filename + ".caffemodel";
   LOG(INFO) << "Snapshotting to " << model_filename;
   WriteProtoToBinaryFile(net_param, model_filename.c_str());
+  writeLastModelFileName(filename);
   SolverState state;
   SnapshotSolverState(&state);
   state.set_iter(iter_ + 1);
