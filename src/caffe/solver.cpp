@@ -223,9 +223,7 @@ void Solver<Dtype>::Step(int iters) {
     // Save a snapshot if needed.
     if (g_receive_stop_signal) {
       LOG(INFO) << "Training stopped by user!!!";
-      LOG(INFO) << "saving state...";
-      Snapshot();
-      LOG(INFO) << "saving state done";
+      ++iter_;
       return;
     }
     if (param_.snapshot() && (iter_ + 1) % param_.snapshot() == 0) {
@@ -354,7 +352,7 @@ void Solver<Dtype>::Snapshot() {
   model_filename = filename + ".caffemodel";
   LOG(INFO) << "Snapshotting to " << model_filename;
   WriteProtoToBinaryFile(net_param, model_filename.c_str());
-  writeLastModelFileName(filename);
+  writeLastModelFileName(model_filename);
   SolverState state;
   SnapshotSolverState(&state);
   state.set_iter(iter_ + 1);
