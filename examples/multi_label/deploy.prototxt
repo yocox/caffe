@@ -238,7 +238,7 @@ layers {
 }
 layers {
   name: "prob"
-  type: SOFTMAX
+  type: SIGMOID
   bottom: "fc8"
   top: "prob"
 }
