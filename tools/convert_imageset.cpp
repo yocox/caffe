@@ -59,12 +59,12 @@ int main(int argc, char** argv) {
   // while (infile >> filename >> label) {
   //   lines.push_back(std::make_pair(filename, label));
   // }
-  // if (argc >= (arg_offset+5) && argv[arg_offset+4][0] == '1') {
-  //   // randomly shuffle data
-  //   LOG(INFO) << "Shuffling data";
-  //   std::random_shuffle(lines.begin(), lines.end());
-  // }
-  // LOG(INFO) << "A total of " << lines.size() << " images.";
+  if (argc >= (arg_offset+5) && argv[arg_offset+4][0] == '1') {
+   // randomly shuffle data
+   LOG(INFO) << "Shuffling data";
+    std::random_shuffle(lines.begin(), lines.end());
+  }
+  LOG(INFO) << "A total of " << lines.size() << " images.";
 
   string db_backend = "leveldb";
   if (argc >= (arg_offset+6)) {
